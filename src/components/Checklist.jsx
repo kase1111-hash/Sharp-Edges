@@ -1,9 +1,6 @@
-import { useState } from 'react';
 import { Square, CheckSquare } from 'lucide-react';
 
-export default function Checklist({ items }) {
-  const [checkedItems, setCheckedItems] = useState(new Set());
-
+export default function Checklist({ items, checkedItems, onCheckedChange }) {
   const toggleItem = (index) => {
     const newChecked = new Set(checkedItems);
     if (newChecked.has(index)) {
@@ -11,7 +8,7 @@ export default function Checklist({ items }) {
     } else {
       newChecked.add(index);
     }
-    setCheckedItems(newChecked);
+    onCheckedChange(newChecked);
   };
 
   const completedCount = checkedItems.size;
