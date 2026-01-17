@@ -187,7 +187,340 @@ src/
 
 ---
 
-## 5. API Integration
+## 5. Implementation Guide (5 Phases)
+
+This section breaks the development process into five sequential phases. Complete each phase before moving to the next.
+
+### Phase 1: Project Setup & Static UI
+
+**Goal**: Establish project foundation and build the complete UI with mock data.
+
+#### Tasks
+1. **Initialize Project**
+   ```bash
+   npm create vite@latest sharp-edges -- --template react
+   cd sharp-edges
+   npm install tailwindcss postcss autoprefixer lucide-react
+   npx tailwindcss init -p
+   ```
+
+2. **Configure Tailwind** - Update `tailwind.config.js` and add directives to CSS
+
+3. **Create Constants File** (`src/utils/constants.js`)
+   - Define expertise levels array
+   - Define environments array
+   - Define example tasks array
+   - Define hazard category icons/colors
+   - Define risk level colors and thresholds
+
+4. **Build Input Form Component**
+   - Text area for task description
+   - Dropdown for expertise level
+   - Dropdown for environment
+   - Example task buttons (clickable chips)
+   - Submit button (disabled when empty)
+
+5. **Build Static Results Display**
+   - Create mock assessment data matching the schema
+   - Build Section component (collapsible card)
+   - Build all result sections with mock data:
+     - Task summary header
+     - Parsed context tags
+     - Hazards list with category icons
+     - Risk assessment with placeholder matrix
+     - Controls hierarchy (5 tiers)
+     - Pre-task checklist (static)
+     - Emergency actions list
+     - Disclaimer footer
+
+#### Deliverables
+- [ ] Running Vite + React + Tailwind project
+- [ ] Complete input form with all fields
+- [ ] All result sections rendering with mock data
+- [ ] Responsive layout (mobile-friendly)
+
+---
+
+### Phase 2: Risk Matrix & Calculations
+
+**Goal**: Build the interactive 5×5 risk matrix and implement scoring logic.
+
+#### Tasks
+1. **Create Risk Calculation Utilities** (`src/utils/riskCalculations.js`)
+   ```javascript
+   // Calculate risk score
+   export const calculateRiskScore = (severity, likelihood) =>
+     severity * likelihood;
+
+   // Determine risk level from score
+   export const getRiskLevel = (score) => {
+     if (score <= 4) return 'low';
+     if (score <= 9) return 'moderate';
+     if (score <= 16) return 'high';
+     return 'critical';
+   };
+
+   // Get color for risk level
+   export const getRiskColor = (level) => {
+     const colors = {
+       low: '#22c55e',
+       moderate: '#eab308',
+       high: '#f97316',
+       critical: '#ef4444'
+     };
+     return colors[level];
+   };
+
+   // Get cell color for matrix position
+   export const getMatrixCellColor = (severity, likelihood) => {
+     const score = calculateRiskScore(severity, likelihood);
+     return getRiskColor(getRiskLevel(score));
+   };
+   ```
+
+2. **Build RiskMatrix Component**
+   - Render 5×5 grid using CSS Grid or Flexbox
+   - Color each cell based on severity × likelihood
+   - Add axis labels (Severity 1-5 on Y, Likelihood 1-5 on X)
+   - Highlight current assessment position with ring/border
+   - Add hover states showing score value
+
+3. **Build RiskLevelBadge Component**
+   - Display risk level text (Low/Moderate/High/Critical)
+   - Background color matches risk level
+   - Show numeric score (e.g., "Score: 12")
+
+4. **Integrate with Results Display**
+   - Replace placeholder matrix with RiskMatrix component
+   - Pass severity/likelihood from mock data
+   - Display RiskLevelBadge in assessment header
+
+#### Deliverables
+- [ ] Working risk calculation functions with tests
+- [ ] Interactive 5×5 risk matrix with correct colors
+- [ ] Current position indicator on matrix
+- [ ] Risk level badge displaying correctly
+
+---
+
+### Phase 3: API Integration
+
+**Goal**: Connect to Claude API and replace mock data with real responses.
+
+#### Tasks
+1. **Create API Service** (`src/services/api.js`)
+   ```javascript
+   const SYSTEM_PROMPT = `You are a safety analyst...`; // Full prompt
+
+   export const analyzeTask = async (task, expertise, environment) => {
+     const response = await fetch('https://api.anthropic.com/v1/messages', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
+         'anthropic-version': '2023-06-01'
+       },
+       body: JSON.stringify({
+         model: 'claude-sonnet-4-20250514',
+         max_tokens: 2000,
+         system: SYSTEM_PROMPT,
+         messages: [{
+           role: 'user',
+           content: `Task: ${task}\nExpertise: ${expertise}\nEnvironment: ${environment}`
+         }]
+       })
+     });
+
+     if (!response.ok) throw new Error('API request failed');
+     return response.json();
+   };
+   ```
+
+2. **Create Custom Hook** (`src/hooks/useRiskAnalysis.js`)
+   ```javascript
+   export const useRiskAnalysis = () => {
+     const [assessment, setAssessment] = useState(null);
+     const [loading, setLoading] = useState(false);
+     const [error, setError] = useState(null);
+
+     const analyze = async (task, expertise, environment) => {
+       setLoading(true);
+       setError(null);
+       try {
+         const response = await analyzeTask(task, expertise, environment);
+         const parsed = parseResponse(response);
+         setAssessment(parsed);
+       } catch (err) {
+         setError(err.message);
+       } finally {
+         setLoading(false);
+       }
+     };
+
+     return { assessment, loading, error, analyze };
+   };
+   ```
+
+3. **Implement Response Parsing**
+   - Extract JSON from response text using regex
+   - Validate required fields exist
+   - Provide fallback values for missing optional fields
+   - Handle malformed JSON gracefully
+
+4. **Build Loading State UI**
+   - Spinner animation
+   - "Analyzing risks..." text
+   - Disable form inputs during loading
+
+5. **Build Error State UI**
+   - Red error banner
+   - User-friendly error messages
+   - "Try again" button
+
+6. **Environment Configuration**
+   - Create `.env.local` for API key
+   - Add `.env.local` to `.gitignore`
+   - Document setup in README
+
+#### Deliverables
+- [ ] Successful API calls returning assessments
+- [ ] JSON parsing working reliably
+- [ ] Loading state with spinner
+- [ ] Error handling with user feedback
+- [ ] Environment variable configuration
+
+---
+
+### Phase 4: Interactive Features
+
+**Goal**: Add interactivity to checklist, sections, and polish the UX.
+
+#### Tasks
+1. **Implement Collapsible Sections**
+   ```javascript
+   const Section = ({ title, icon, children, defaultOpen = true }) => {
+     const [isOpen, setIsOpen] = useState(defaultOpen);
+     return (
+       <div className="border rounded-lg">
+         <button onClick={() => setIsOpen(!isOpen)}>
+           {icon} {title} {isOpen ? '▼' : '▶'}
+         </button>
+         {isOpen && <div>{children}</div>}
+       </div>
+     );
+   };
+   ```
+
+2. **Build Interactive Checklist**
+   - Local state for checked items: `useState(new Set())`
+   - Toggle function for each item
+   - Visual checkmark/checkbox styling
+   - Progress indicator (e.g., "3/7 completed")
+   - Persist checked state during session
+
+3. **Add Example Task Quick-Select**
+   - Render example tasks as clickable buttons/chips
+   - On click, populate task input field
+   - Optional: auto-submit after selection
+
+4. **Enhance Form UX**
+   - Character count for task description
+   - Clear button to reset form
+   - Keyboard shortcut (Cmd/Ctrl+Enter) to submit
+
+5. **Add Animation & Transitions**
+   - Fade in results when loaded
+   - Smooth collapse/expand for sections
+   - Button hover/active states
+
+6. **Implement "New Assessment" Flow**
+   - Button to clear results and start over
+   - Confirm dialog if checklist has progress
+
+#### Deliverables
+- [ ] All sections collapsible with smooth animation
+- [ ] Working checklist with visual feedback
+- [ ] Example tasks populate input on click
+- [ ] Polished form interactions
+- [ ] Clear path to start new assessment
+
+---
+
+### Phase 5: Testing, Polish & Deployment
+
+**Goal**: Ensure reliability, accessibility, and prepare for production.
+
+#### Tasks
+1. **Write Unit Tests** (Vitest or Jest)
+   ```javascript
+   // riskCalculations.test.js
+   test('calculates risk score correctly', () => {
+     expect(calculateRiskScore(3, 4)).toBe(12);
+   });
+
+   test('returns correct risk level', () => {
+     expect(getRiskLevel(4)).toBe('low');
+     expect(getRiskLevel(9)).toBe('moderate');
+     expect(getRiskLevel(16)).toBe('high');
+     expect(getRiskLevel(25)).toBe('critical');
+   });
+   ```
+
+2. **Write Integration Tests**
+   - Mock API responses
+   - Test form submission flow
+   - Test error handling paths
+
+3. **Accessibility Audit**
+   - Run axe-core or Lighthouse audit
+   - Add ARIA labels to interactive elements
+   - Ensure keyboard navigation works
+   - Test with screen reader
+   - Verify color contrast ratios
+
+4. **Performance Optimization**
+   - Lazy load result components
+   - Memoize expensive calculations
+   - Optimize bundle size (check with `npm run build`)
+
+5. **Add Disclaimer & Legal**
+   - Prominent disclaimer on results
+   - Link to full terms (if applicable)
+   - "This is advisory only" messaging
+
+6. **Production Build Setup**
+   - Configure production environment variables
+   - Set up backend proxy for API key (recommended)
+   - Configure CSP headers if needed
+
+7. **Deploy**
+   - Build: `npm run build`
+   - Deploy to Vercel/Netlify/CloudFlare Pages
+   - Verify production functionality
+   - Set up error monitoring (optional: Sentry)
+
+#### Deliverables
+- [ ] Unit tests passing (>80% coverage on utils)
+- [ ] Integration tests for critical paths
+- [ ] Accessibility score >90 on Lighthouse
+- [ ] Production build under 200KB (gzipped)
+- [ ] Deployed and functional on production URL
+
+---
+
+### Phase Summary
+
+| Phase | Focus | Key Outcome |
+|-------|-------|-------------|
+| 1 | Setup & Static UI | Complete UI with mock data |
+| 2 | Risk Matrix | Interactive scoring visualization |
+| 3 | API Integration | Real AI-powered assessments |
+| 4 | Interactivity | Polished user experience |
+| 5 | Testing & Deploy | Production-ready application |
+
+---
+
+## 6. API Integration
 
 ### 5.1 Endpoint
 ```
@@ -240,14 +573,14 @@ The system prompt must instruct the AI to:
 
 ---
 
-## 6. UI/UX Requirements
+## 7. UI/UX Requirements
 
-### 6.1 Layout
+### 7.1 Layout
 - Max width: 896px (4xl)
 - Centered container with responsive padding
 - Card-based sections with rounded corners and subtle shadows
 
-### 6.2 Color Scheme
+### 7.2 Color Scheme
 | Element | Color |
 |---------|-------|
 | Primary action | Blue-600 (#2563eb) |
@@ -258,13 +591,13 @@ The system prompt must instruct the AI to:
 | Background | Gray-50 (#f9fafb) |
 | Card background | White |
 
-### 6.3 Interactive Elements
+### 7.3 Interactive Elements
 - **Example task buttons**: Click to populate task input
 - **Collapsible sections**: Toggle visibility of assessment sections
 - **Checklist items**: Checkable pre-task verification items
 - **Loading state**: Spinner with "Analyzing Risks..." text
 
-### 6.4 Accessibility
+### 7.4 Accessibility
 - All interactive elements must be keyboard accessible
 - Color indicators must have text alternatives
 - Form inputs must have associated labels
@@ -272,9 +605,9 @@ The system prompt must instruct the AI to:
 
 ---
 
-## 7. Data Schema
+## 8. Data Schema
 
-### 7.1 Assessment Response Schema
+### 8.1 Assessment Response Schema
 ```typescript
 interface Assessment {
   taskSummary: string;
@@ -312,7 +645,7 @@ interface Assessment {
 
 ---
 
-## 8. Example Tasks Database
+## 9. Example Tasks Database
 
 Pre-defined quick-select tasks:
 1. "Changing my car's brake pads in the driveway"
@@ -325,39 +658,39 @@ Pre-defined quick-select tasks:
 
 ---
 
-## 9. Security Considerations
+## 10. Security Considerations
 
-### 9.1 API Key Management
+### 10.1 API Key Management
 - **Development**: Environment variables (`.env.local`)
 - **Production**: Backend proxy to avoid client-side exposure
 - **Never**: Commit API keys to version control
 
-### 9.2 Input Validation
+### 10.2 Input Validation
 - Sanitize task description before display
 - Limit input length to prevent abuse
 - Rate limit API calls per session
 
-### 9.3 Content Safety
+### 10.3 Content Safety
 - AI responses may be unpredictable; display advisory disclaimer
 - Do not store user task descriptions without consent
 
 ---
 
-## 10. Future Enhancements
+## 11. Future Enhancements
 
-### 10.1 Phase 2
+### 11.1 Phase 2
 - [ ] Save assessments to local storage
 - [ ] Export assessment as PDF
 - [ ] Share assessment via URL
 - [ ] Dark mode support
 
-### 10.2 Phase 3
+### 11.2 Phase 3
 - [ ] User accounts and assessment history
 - [ ] Custom hazard categories
 - [ ] Industry-specific templates (construction, food service, etc.)
 - [ ] Multi-language support
 
-### 10.3 Phase 4
+### 11.3 Phase 4
 - [ ] Mobile app (React Native)
 - [ ] Offline mode with cached AI responses
 - [ ] Integration with safety management systems
@@ -365,19 +698,19 @@ Pre-defined quick-select tasks:
 
 ---
 
-## 11. Testing Requirements
+## 12. Testing Requirements
 
-### 11.1 Unit Tests
+### 12.1 Unit Tests
 - Risk score calculation functions
 - Risk level determination
 - JSON parsing and validation
 
-### 11.2 Integration Tests
+### 12.2 Integration Tests
 - API call and response handling
 - Error state management
 - Form submission flow
 
-### 11.3 E2E Tests
+### 12.3 E2E Tests
 - Complete user flow from input to assessment display
 - Example task button functionality
 - Section collapse/expand behavior
@@ -385,7 +718,7 @@ Pre-defined quick-select tasks:
 
 ---
 
-## 12. Acceptance Criteria
+## 13. Acceptance Criteria
 
 1. User can enter a task description and receive a safety assessment
 2. Assessment displays all required sections (hazards, controls, checklist, etc.)
