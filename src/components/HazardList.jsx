@@ -1,7 +1,8 @@
+import { memo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { HAZARD_CATEGORIES } from '../utils/constants';
 
-export default function HazardList({ hazards }) {
+const HazardList = memo(function HazardList({ hazards }) {
   return (
     <div className="space-y-3">
       {hazards.map((hazard, index) => {
@@ -35,4 +36,6 @@ export default function HazardList({ hazards }) {
       })}
     </div>
   );
-}
+});
+
+export default HazardList;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import {
   calculateRiskScore,
   getMatrixCellClass,
@@ -10,17 +10,36 @@ import {
   LIKELIHOOD_SCALE,
 } from '../utils/riskCalculations';
 
-export default function RiskMatrix({ severity, likelihood }) {
+function RiskMatrix({ severity, likelihood }) {
   const [hoveredCell, setHoveredCell] = useState(null);
 
-  const currentScore = calculateRiskScore(severity, likelihood);
-  const currentLevel = getRiskLevel(currentScore);
+  // Memoize the current risk calculation
+  const { currentScore, currentLevel } = useMemo(() => ({
+    currentScore: calculateRiskScore(severity, likelihood),
+    currentLevel: getRiskLevel(calculateRiskScore(severity, likelihood)),
+  }), [severity, likelihood]);
+
+  // Memoize the matrix data to avoid recalculating on every hover
+  const matrixData = useMemo(() => {
+    return [5, 4, 3, 2, 1].flatMap((sev) =>
+      [1, 2, 3, 4, 5].map((lik) => {
+        const score = calculateRiskScore(sev, lik);
+        return {
+          sev,
+          lik,
+          score,
+          level: getRiskLevel(score),
+          cellClass: getMatrixCellClass(sev, lik),
+        };
+      })
+    );
+  }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" role="region" aria-label="Risk Assessment Matrix">
       {/* Matrix Container */}
       <div className="overflow-x-auto">
-        <div className="min-w-[420px]">
+        <div className="min-w-[420px]" aria-label={`Current risk: Severity ${severity} (${getSeverityLabel(severity)}), Likelihood ${likelihood} (${getLikelihoodLabel(likelihood)}), Score ${currentScore}, Level ${RISK_LEVEL_INFO[currentLevel].label}`}>
           <div className="flex">
             {/* Y-axis labels (Severity) */}
             <div className="flex flex-col pr-2">
@@ -57,37 +76,36 @@ export default function RiskMatrix({ severity, likelihood }) {
               </div>
 
               {/* Matrix cells */}
-              <div className="grid grid-cols-5 gap-1">
-                {[5, 4, 3, 2, 1].map((sev) =>
-                  [1, 2, 3, 4, 5].map((lik) => {
-                    const score = calculateRiskScore(sev, lik);
-                    const level = getRiskLevel(score);
-                    const isSelected = sev === severity && lik === likelihood;
-                    const isHovered = hoveredCell?.sev === sev && hoveredCell?.lik === lik;
+              <div className="grid grid-cols-5 gap-1" role="grid" aria-label="5x5 risk matrix">
+                {matrixData.map(({ sev, lik, score, level, cellClass }) => {
+                  const isSelected = sev === severity && lik === likelihood;
+                  const isHovered = hoveredCell?.sev === sev && hoveredCell?.lik === lik;
 
-                    return (
-                      <div
-                        key={`${sev}-${lik}`}
-                        onMouseEnter={() => setHoveredCell({ sev, lik, score, level })}
-                        onMouseLeave={() => setHoveredCell(null)}
-                        className={`
-                          h-12 flex items-center justify-center rounded-md text-sm font-semibold text-white
-                          cursor-pointer transition-all duration-150
-                          ${getMatrixCellClass(sev, lik)}
-                          ${isSelected
-                            ? 'ring-2 ring-offset-2 ring-gray-900 scale-105 z-10'
-                            : isHovered
-                              ? 'opacity-100 scale-102'
-                              : 'opacity-50 hover:opacity-80'
-                          }
-                        `}
-                        title={`Severity: ${getSeverityLabel(sev)} (${sev}), Likelihood: ${getLikelihoodLabel(lik)} (${lik}), Score: ${score}`}
-                      >
-                        {score}
-                      </div>
-                    );
-                  })
-                )}
+                  return (
+                    <div
+                      key={`${sev}-${lik}`}
+                      role="gridcell"
+                      aria-selected={isSelected}
+                      aria-label={`Severity ${sev}, Likelihood ${lik}, Score ${score}, ${RISK_LEVEL_INFO[level].label} risk${isSelected ? ' (current assessment)' : ''}`}
+                      onMouseEnter={() => setHoveredCell({ sev, lik, score, level })}
+                      onMouseLeave={() => setHoveredCell(null)}
+                      className={`
+                        h-12 flex items-center justify-center rounded-md text-sm font-semibold text-white
+                        cursor-pointer transition-all duration-150
+                        ${cellClass}
+                        ${isSelected
+                          ? 'ring-2 ring-offset-2 ring-gray-900 scale-105 z-10'
+                          : isHovered
+                            ? 'opacity-100 scale-102'
+                            : 'opacity-50 hover:opacity-80'
+                        }
+                      `}
+                      title={`Severity: ${getSeverityLabel(sev)} (${sev}), Likelihood: ${getLikelihoodLabel(lik)} (${lik}), Score: ${score}`}
+                    >
+                      {score}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* X-axis title */}
@@ -180,3 +198,5 @@ export default function RiskMatrix({ severity, likelihood }) {
     </div>
   );
 }
+
+export default memo(RiskMatrix);

@@ -19,25 +19,34 @@ export default function Checklist({ items, checkedItems, onCheckedChange }) {
     <div className="space-y-4">
       {/* Progress indicator */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden"
+          role="progressbar"
+          aria-valuenow={completedCount}
+          aria-valuemin={0}
+          aria-valuemax={totalCount}
+          aria-label={`Checklist progress: ${completedCount} of ${totalCount} completed`}
+        >
           <div
             className="h-full bg-green-500 transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
+        <span className="text-sm font-medium text-gray-600 whitespace-nowrap" aria-hidden="true">
           {completedCount} / {totalCount} completed
         </span>
       </div>
 
       {/* Checklist items */}
-      <ul className="space-y-2">
+      <ul className="space-y-2" role="list" aria-label="Pre-task checklist">
         {items.map((item, index) => {
           const isChecked = checkedItems.has(index);
           return (
-            <li key={index}>
+            <li key={index} role="listitem">
               <button
                 onClick={() => toggleItem(index)}
+                role="checkbox"
+                aria-checked={isChecked}
                 className={`
                   w-full flex items-start gap-3 p-3 rounded-lg text-left transition-colors
                   ${isChecked
@@ -47,9 +56,9 @@ export default function Checklist({ items, checkedItems, onCheckedChange }) {
                 `}
               >
                 {isChecked ? (
-                  <CheckSquare className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <CheckSquare className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 ) : (
-                  <Square className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <Square className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 )}
                 <span className={`text-sm ${isChecked ? 'text-green-800 line-through' : 'text-gray-700'}`}>
                   {item}

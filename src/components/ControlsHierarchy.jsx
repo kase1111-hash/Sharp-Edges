@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Ban, RefreshCw, Wrench, ClipboardList, HardHat } from 'lucide-react';
 import { CONTROL_HIERARCHY } from '../utils/constants';
 
@@ -17,7 +18,7 @@ const CONTROL_COLORS = {
   ppe: 'bg-green-100 text-green-700 border-green-200',
 };
 
-export default function ControlsHierarchy({ controls }) {
+const ControlsHierarchy = memo(function ControlsHierarchy({ controls }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
@@ -54,4 +55,6 @@ export default function ControlsHierarchy({ controls }) {
       })}
     </div>
   );
-}
+});
+
+export default ControlsHierarchy;
