@@ -61,18 +61,19 @@ npm run dev
 
 ## Configuration
 
-The tool calls the Anthropic API directly. You'll need to configure your API key:
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
 
-```javascript
-// Add your API key to the fetch headers
-headers: {
-  'Content-Type': 'application/json',
-  'x-api-key': 'YOUR_ANTHROPIC_API_KEY',
-  'anthropic-version': '2023-06-01'
-}
-```
+2. Add your Anthropic API key to `.env.local`:
+   ```
+   VITE_ANTHROPIC_API_KEY=your_api_key_here
+   ```
 
-> **Note**: For production use, implement proper API key management via environment variables and a backend proxy to avoid exposing keys in client-side code.
+3. Get an API key from [console.anthropic.com](https://console.anthropic.com/)
+
+> **Note**: For production use, implement a backend proxy to avoid exposing API keys in client-side code. The current setup is for development only.
 
 ## Example Tasks
 
@@ -95,8 +96,23 @@ The tool includes quick-select examples:
 
 ```
 Sharp-Edges/
-├── Example.jsx    # Main React component with full implementation
-└── README.md      # This file
+├── src/
+│   ├── components/          # React UI components
+│   │   ├── RiskAssessmentTool.jsx
+│   │   ├── InputForm.jsx
+│   │   ├── ResultsDisplay.jsx
+│   │   ├── RiskMatrix.jsx
+│   │   └── ...
+│   ├── hooks/
+│   │   └── useRiskAnalysis.js   # API state management
+│   ├── services/
+│   │   └── api.js               # Anthropic API integration
+│   └── utils/
+│       ├── constants.js         # App configuration
+│       └── riskCalculations.js  # Risk scoring logic
+├── .env.example                 # Environment template
+├── package.json
+└── README.md
 ```
 
 ## Disclaimer
