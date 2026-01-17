@@ -14,10 +14,15 @@ import RiskMatrix from './RiskMatrix';
 import HazardList from './HazardList';
 import ControlsHierarchy from './ControlsHierarchy';
 import Checklist from './Checklist';
+import {
+  calculateRiskScore,
+  getSeverityLabel,
+  getLikelihoodLabel,
+} from '../utils/riskCalculations';
 
 export default function ResultsDisplay({ assessment }) {
   const { riskAssessment } = assessment;
-  const riskScore = riskAssessment.severity * riskAssessment.likelihood;
+  const riskScore = calculateRiskScore(riskAssessment.severity, riskAssessment.likelihood);
 
   return (
     <div className="space-y-4">
@@ -94,13 +99,32 @@ export default function ResultsDisplay({ assessment }) {
           </div>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-500">Severity</div>
                 <div className="text-2xl font-bold text-gray-900">{riskAssessment.severity}/5</div>
+                <div className="text-sm text-gray-600 mt-1">{getSeverityLabel(riskAssessment.severity)}</div>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-500">Likelihood</div>
                 <div className="text-2xl font-bold text-gray-900">{riskAssessment.likelihood}/5</div>
+                <div className="text-sm text-gray-600 mt-1">{getLikelihoodLabel(riskAssessment.likelihood)}</div>
+              </div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-gray-700">Risk Score</h4>
+                <span className="text-2xl font-bold text-gray-900">{riskScore}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all ${
+                    riskScore <= 4 ? 'bg-green-500' :
+                    riskScore <= 9 ? 'bg-yellow-500' :
+                    riskScore <= 16 ? 'bg-orange-500' :
+                    'bg-red-500'
+                  }`}
+                  style={{ width: `${(riskScore / 25) * 100}%` }}
+                />
               </div>
             </div>
             <div>
