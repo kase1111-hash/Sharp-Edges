@@ -20,12 +20,16 @@ import {
   getLikelihoodLabel,
 } from '../utils/riskCalculations';
 
-export default function ResultsDisplay({ assessment }) {
+export default function ResultsDisplay({ assessment, checkedItems, onCheckedChange }) {
   const { riskAssessment } = assessment;
   const riskScore = calculateRiskScore(riskAssessment.severity, riskAssessment.likelihood);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fadeIn"
+      style={{
+        animation: 'fadeIn 0.4s ease-out'
+      }}
+    >
       {/* Header with Task Summary */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -142,7 +146,11 @@ export default function ResultsDisplay({ assessment }) {
 
       {/* Pre-Task Checklist */}
       <Section title="Pre-Task Checklist" icon={ClipboardCheck}>
-        <Checklist items={assessment.preTaskChecklist} />
+        <Checklist
+          items={assessment.preTaskChecklist}
+          checkedItems={checkedItems}
+          onCheckedChange={onCheckedChange}
+        />
       </Section>
 
       {/* Emergency Actions */}

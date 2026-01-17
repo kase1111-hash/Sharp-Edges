@@ -28,6 +28,15 @@ export default function RiskAssessmentTool() {
     }
   };
 
+  const handleResetClick = () => {
+    // Show confirmation if checklist has progress
+    if (checkedItems.size > 0) {
+      setShowConfirmDialog(true);
+    } else {
+      handleReset();
+    }
+  };
+
   const handleReset = () => {
     reset();
     setLastInput(null);
@@ -63,6 +72,14 @@ export default function RiskAssessmentTool() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        title="Discard Progress?"
+        message="You have completed some items on the pre-task checklist. Starting a new assessment will discard this progress."
+        onConfirm={handleReset}
+        onCancel={handleCancelReset}
+      />
     </div>
   );
 }
