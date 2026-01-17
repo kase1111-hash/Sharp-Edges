@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { EXPERTISE_LEVELS, ENVIRONMENTS, EXAMPLE_TASKS } from '../utils/constants';
 
 export default function InputForm({ onSubmit, loading }) {
@@ -17,6 +17,27 @@ export default function InputForm({ onSubmit, loading }) {
   const handleExampleClick = (example) => {
     setTaskDescription(example);
   };
+
+  const handleClear = () => {
+    setTaskDescription('');
+    setExpertiseLevel('general');
+    setEnvironment('home');
+  };
+
+  // Keyboard shortcut: Cmd/Ctrl+Enter to submit
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        if (taskDescription.trim() && !loading) {
+          e.preventDefault();
+          onSubmit({ taskDescription, expertiseLevel, environment });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [taskDescription, expertiseLevel, environment, loading, onSubmit]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -44,8 +65,22 @@ export default function InputForm({ onSubmit, loading }) {
             className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-gray-900 placeholder-gray-400"
             disabled={loading}
           />
-          <div className="mt-1 text-right text-xs text-gray-400">
-            {taskDescription.length} / 2000 characters
+          <div className="mt-1 flex items-center justify-between text-xs text-gray-400">
+            <span>Press Ctrl+Enter to submit</span>
+            <div className="flex items-center gap-3">
+              {taskDescription && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  disabled={loading}
+                  className="flex items-center gap-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X className="w-3 h-3" />
+                  Clear
+                </button>
+              )}
+              <span>{taskDescription.length} / 2000 characters</span>
+            </div>
           </div>
         </div>
 
