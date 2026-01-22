@@ -2,11 +2,14 @@ import { useState, useRef } from 'react';
 import InputForm from './InputForm';
 import ResultsDisplay from './ResultsDisplay';
 import ErrorDisplay from './ErrorDisplay';
+import ConfirmDialog from './ConfirmDialog';
 import { useRiskAnalysis } from '../hooks/useRiskAnalysis';
 
 export default function RiskAssessmentTool() {
   const { assessment, loading, error, analyze, reset, clearError } = useRiskAnalysis();
   const [lastInput, setLastInput] = useState(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [checkedItems, setCheckedItems] = useState(new Set());
   const resultsRef = useRef(null);
 
   const handleSubmit = async ({ taskDescription, expertiseLevel, environment }) => {
@@ -40,8 +43,26 @@ export default function RiskAssessmentTool() {
   const handleReset = () => {
     reset();
     setLastInput(null);
+    setCheckedItems(new Set());
+    setShowConfirmDialog(false);
     // Scroll back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelReset = () => {
+    setShowConfirmDialog(false);
+  };
+
+  const handleCheckedChange = (itemIndex, isChecked) => {
+    setCheckedItems(prev => {
+      const newSet = new Set(prev);
+      if (isChecked) {
+        newSet.add(itemIndex);
+      } else {
+        newSet.delete(itemIndex);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -61,10 +82,14 @@ export default function RiskAssessmentTool() {
         {/* Results */}
         {assessment && (
           <div ref={resultsRef}>
-            <ResultsDisplay assessment={assessment} />
+            <ResultsDisplay
+              assessment={assessment}
+              checkedItems={checkedItems}
+              onCheckedChange={handleCheckedChange}
+            />
 
             <button
-              onClick={handleReset}
+              onClick={handleResetClick}
               className="w-full mt-6 py-3 px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
             >
               Start New Assessment
