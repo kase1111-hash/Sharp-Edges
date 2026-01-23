@@ -43,7 +43,7 @@ The tool uses a standard risk matrix:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/Sharp-Edges.git
+git clone https://github.com/kase1111-hash/Sharp-Edges.git
 cd Sharp-Edges
 
 # Install dependencies
