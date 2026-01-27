@@ -53,16 +53,8 @@ export default function RiskAssessmentTool() {
     setShowConfirmDialog(false);
   };
 
-  const handleCheckedChange = (itemIndex, isChecked) => {
-    setCheckedItems(prev => {
-      const newSet = new Set(prev);
-      if (isChecked) {
-        newSet.add(itemIndex);
-      } else {
-        newSet.delete(itemIndex);
-      }
-      return newSet;
-    });
+  const handleCheckedChange = (newCheckedItems) => {
+    setCheckedItems(newCheckedItems);
   };
 
   return (
