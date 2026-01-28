@@ -36,7 +36,7 @@ const ControlsHierarchy = memo(function ControlsHierarchy({ controls }) {
         return (
           <div key={tier.key} className={`p-4 rounded-lg border ${colorClass}`}>
             <div className="flex items-center gap-2 mb-2">
-              <Icon className="w-5 h-5" />
+              <Icon className="w-5 h-5" aria-hidden="true" />
               <h4 className="font-medium">
                 {tier.priority}. {tier.label}
               </h4>
