@@ -43,7 +43,7 @@ export default function InputForm({ onSubmit, loading }) {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 bg-blue-100 rounded-lg">
-          <AlertTriangle className="w-6 h-6 text-blue-600" />
+          <AlertTriangle className="w-6 h-6 text-blue-600" aria-hidden="true" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Risk Assessment Tool</h1>
@@ -64,6 +64,7 @@ export default function InputForm({ onSubmit, loading }) {
             placeholder="Describe the task in detail, e.g., 'Cutting down a dead tree in my backyard with a chainsaw'"
             className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-gray-900 placeholder-gray-400"
             disabled={loading}
+            maxLength={2000}
           />
           <div className="mt-1 flex items-center justify-between text-xs text-gray-400">
             <span>Press Ctrl+Enter to submit</span>
@@ -75,7 +76,7 @@ export default function InputForm({ onSubmit, loading }) {
                   disabled={loading}
                   className="flex items-center gap-1 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3 h-3" aria-hidden="true" />
                   Clear
                 </button>
               )}
@@ -153,7 +154,7 @@ export default function InputForm({ onSubmit, loading }) {
         >
           {loading ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
               Analyzing Risks...
             </>
           ) : (

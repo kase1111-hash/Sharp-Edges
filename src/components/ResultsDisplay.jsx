@@ -47,41 +47,57 @@ export default function ResultsDisplay({ assessment, checkedItems, onCheckedChan
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">Actions</h4>
             <div className="flex flex-wrap gap-1">
-              {assessment.parsedContext.actions.map((action, i) => (
-                <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                  {action}
-                </span>
-              ))}
+              {assessment.parsedContext.actions.length > 0 ? (
+                assessment.parsedContext.actions.map((action, i) => (
+                  <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                    {action}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-400 italic">None identified</span>
+              )}
             </div>
           </div>
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">Materials</h4>
             <div className="flex flex-wrap gap-1">
-              {assessment.parsedContext.materials.map((material, i) => (
-                <span key={i} className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
-                  {material}
-                </span>
-              ))}
+              {assessment.parsedContext.materials.length > 0 ? (
+                assessment.parsedContext.materials.map((material, i) => (
+                  <span key={i} className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
+                    {material}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-400 italic">None identified</span>
+              )}
             </div>
           </div>
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">Tools</h4>
             <div className="flex flex-wrap gap-1">
-              {assessment.parsedContext.tools.map((tool, i) => (
-                <span key={i} className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
-                  {tool}
-                </span>
-              ))}
+              {assessment.parsedContext.tools.length > 0 ? (
+                assessment.parsedContext.tools.map((tool, i) => (
+                  <span key={i} className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
+                    {tool}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-400 italic">None identified</span>
+              )}
             </div>
           </div>
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">Environment Factors</h4>
             <div className="flex flex-wrap gap-1">
-              {assessment.parsedContext.environmentFactors.map((factor, i) => (
-                <span key={i} className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">
-                  {factor}
-                </span>
-              ))}
+              {assessment.parsedContext.environmentFactors.length > 0 ? (
+                assessment.parsedContext.environmentFactors.map((factor, i) => (
+                  <span key={i} className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">
+                    {factor}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-400 italic">None identified</span>
+              )}
             </div>
           </div>
         </div>
@@ -184,7 +200,7 @@ export default function ResultsDisplay({ assessment, checkedItems, onCheckedChan
       {/* Disclaimer */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
           <div>
             <h4 className="font-medium text-amber-800">Disclaimer</h4>
             <p className="text-sm text-amber-700 mt-1">

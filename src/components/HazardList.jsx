@@ -19,7 +19,7 @@ const HazardList = memo(function HazardList({ hazards }) {
           >
             <div className="flex items-start gap-3">
               <div className={`p-1.5 rounded ${category.bgColor}`}>
-                <AlertTriangle className={`w-4 h-4 ${category.color}`} />
+                <AlertTriangle className={`w-4 h-4 ${category.color}`} aria-hidden="true" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
