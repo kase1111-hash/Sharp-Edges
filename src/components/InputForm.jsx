@@ -64,6 +64,7 @@ export default function InputForm({ onSubmit, loading }) {
             placeholder="Describe the task in detail, e.g., 'Cutting down a dead tree in my backyard with a chainsaw'"
             className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-gray-900 placeholder-gray-400"
             disabled={loading}
+            maxLength={2000}
           />
           <div className="mt-1 flex items-center justify-between text-xs text-gray-400">
             <span>Press Ctrl+Enter to submit</span>

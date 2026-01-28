@@ -19,7 +19,7 @@ export default function RiskLevelBadge({ level, score, severity, likelihood }) {
       <span className={`font-semibold ${classes.text}`}>
         {info.label} Risk
       </span>
-      {computedScore && (
+      {computedScore != null && (
         <span className={`text-sm ${classes.text} opacity-75`}>
           (Score: {computedScore})
         </span>
