@@ -1,0 +1,392 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { parseAssessmentResponse, analyzeTask, ApiError } from './api';
+import { MOCK_ASSESSMENT } from '../utils/mockData';
+
+// Minimal valid assessment JSON for building test responses
+const VALID_JSON = JSON.stringify(MOCK_ASSESSMENT);
+
+function makeApiResponse(text) {
+  return {
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ content: [{ text }] }),
+  };
+}
+
+function makeErrorResponse(status, body = {}) {
+  return {
+    ok: false,
+    status,
+    json: () => Promise.resolve(body),
+  };
+}
+
+// ───────────────────────────────────────────────
+// parseAssessmentResponse
+// ───────────────────────────────────────────────
+describe('parseAssessmentResponse', () => {
+  it('parses a valid complete JSON response', () => {
+    const result = parseAssessmentResponse(VALID_JSON);
+    expect(result.taskSummary).toBe(MOCK_ASSESSMENT.taskSummary);
+    expect(result.riskAssessment.severity).toBe(4);
+    expect(result.hazards).toHaveLength(5);
+  });
+
+  it('extracts JSON when surrounded by extra text', () => {
+    const wrapped = `Here is the assessment:\n${VALID_JSON}\nEnd of response.`;
+    const result = parseAssessmentResponse(wrapped);
+    expect(result.taskSummary).toBe(MOCK_ASSESSMENT.taskSummary);
+  });
+
+  it('throws PARSE for response with no JSON', () => {
+    expect(() => parseAssessmentResponse('no json here'))
+      .toThrow(ApiError);
+    try {
+      parseAssessmentResponse('no json here');
+    } catch (e) {
+      expect(e.code).toBe('PARSE');
+    }
+  });
+
+  it('throws PARSE for malformed JSON', () => {
+    expect(() => parseAssessmentResponse('{invalid json}'))
+      .toThrow(ApiError);
+    try {
+      parseAssessmentResponse('{invalid json}');
+    } catch (e) {
+      expect(e.code).toBe('PARSE');
+      expect(e.message).toMatch(/Failed to parse JSON/);
+    }
+  });
+
+  it('throws VALIDATION for missing taskSummary', () => {
+    const incomplete = { ...MOCK_ASSESSMENT };
+    delete incomplete.taskSummary;
+    try {
+      parseAssessmentResponse(JSON.stringify(incomplete));
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/taskSummary/);
+    }
+  });
+
+  it('throws VALIDATION for missing hazards', () => {
+    const incomplete = { ...MOCK_ASSESSMENT };
+    delete incomplete.hazards;
+    try {
+      parseAssessmentResponse(JSON.stringify(incomplete));
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/hazards/);
+    }
+  });
+
+  it('throws VALIDATION for missing riskAssessment', () => {
+    const incomplete = { ...MOCK_ASSESSMENT };
+    delete incomplete.riskAssessment;
+    try {
+      parseAssessmentResponse(JSON.stringify(incomplete));
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/riskAssessment/);
+    }
+  });
+
+  it('throws VALIDATION when severity is not a number', () => {
+    const bad = {
+      ...MOCK_ASSESSMENT,
+      riskAssessment: { ...MOCK_ASSESSMENT.riskAssessment, severity: 'high' },
+    };
+    try {
+      parseAssessmentResponse(JSON.stringify(bad));
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/Invalid riskAssessment/);
+    }
+  });
+
+  it('throws VALIDATION when likelihood is not a number', () => {
+    const bad = {
+      ...MOCK_ASSESSMENT,
+      riskAssessment: { ...MOCK_ASSESSMENT.riskAssessment, likelihood: null },
+    };
+    try {
+      parseAssessmentResponse(JSON.stringify(bad));
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+    }
+  });
+
+  it('throws VALIDATION when overallLevel is missing', () => {
+    const bad = {
+      ...MOCK_ASSESSMENT,
+      riskAssessment: { severity: 3, likelihood: 3 },
+    };
+    try {
+      parseAssessmentResponse(JSON.stringify(bad));
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+    }
+  });
+
+  it('defaults empty arrays in parsedContext', () => {
+    const minimal = {
+      ...MOCK_ASSESSMENT,
+      parsedContext: {},
+    };
+    const result = parseAssessmentResponse(JSON.stringify(minimal));
+    expect(result.parsedContext.actions).toEqual([]);
+    expect(result.parsedContext.materials).toEqual([]);
+    expect(result.parsedContext.tools).toEqual([]);
+    expect(result.parsedContext.environmentFactors).toEqual([]);
+  });
+
+  it('defaults empty arrays in controls', () => {
+    const minimal = {
+      ...MOCK_ASSESSMENT,
+      controls: {},
+    };
+    const result = parseAssessmentResponse(JSON.stringify(minimal));
+    expect(result.controls.elimination).toEqual([]);
+    expect(result.controls.substitution).toEqual([]);
+    expect(result.controls.engineering).toEqual([]);
+    expect(result.controls.administrative).toEqual([]);
+    expect(result.controls.ppe).toEqual([]);
+  });
+
+  it('defaults empty strings for optional fields', () => {
+    const noOptionals = { ...MOCK_ASSESSMENT };
+    delete noOptionals.ethicalNote;
+    delete noOptionals.additionalConsiderations;
+    const result = parseAssessmentResponse(JSON.stringify(noOptionals));
+    expect(result.ethicalNote).toBe('');
+    expect(result.additionalConsiderations).toBe('');
+  });
+
+  it('preserves all fields when response is complete', () => {
+    const result = parseAssessmentResponse(VALID_JSON);
+    expect(result.ethicalNote).toBe(MOCK_ASSESSMENT.ethicalNote);
+    expect(result.additionalConsiderations).toBe(MOCK_ASSESSMENT.additionalConsiderations);
+    expect(result.preTaskChecklist).toEqual(MOCK_ASSESSMENT.preTaskChecklist);
+    expect(result.emergencyActions).toEqual(MOCK_ASSESSMENT.emergencyActions);
+  });
+});
+
+// ───────────────────────────────────────────────
+// analyzeTask
+// ───────────────────────────────────────────────
+describe('analyzeTask', () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    vi.stubEnv('VITE_ANTHROPIC_API_KEY', 'test-key-123');
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  it('throws NO_API_KEY when env var is missing', async () => {
+    vi.stubEnv('VITE_ANTHROPIC_API_KEY', '');
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('NO_API_KEY');
+    }
+  });
+
+  it('throws VALIDATION for empty task', async () => {
+    try {
+      await analyzeTask('', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+    }
+  });
+
+  it('throws VALIDATION for whitespace-only task', async () => {
+    try {
+      await analyzeTask('   ', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+    }
+  });
+
+  it('throws VALIDATION for task exceeding 2000 chars', async () => {
+    const longTask = 'a'.repeat(2001);
+    try {
+      await analyzeTask(longTask, 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/2000/);
+    }
+  });
+
+  it('throws VALIDATION for invalid expertise level', async () => {
+    try {
+      await analyzeTask('test task', 'wizard', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/expertise/);
+    }
+  });
+
+  it('throws VALIDATION for invalid environment', async () => {
+    try {
+      await analyzeTask('test task', 'general', 'mars');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('VALIDATION');
+      expect(e.message).toMatch(/environment/);
+    }
+  });
+
+  it('throws AUTH for 401 response', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeErrorResponse(401, { error: { message: 'invalid x-api-key' } }),
+    );
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('AUTH');
+      expect(e.status).toBe(401);
+    }
+  });
+
+  it('throws RATE_LIMIT for 429 response', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeErrorResponse(429, { error: { message: 'rate limit exceeded' } }),
+    );
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('RATE_LIMIT');
+      expect(e.status).toBe(429);
+    }
+  });
+
+  it('throws SERVER for 500 response', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeErrorResponse(500),
+    );
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('SERVER');
+      expect(e.status).toBe(500);
+    }
+  });
+
+  it('throws HTTP for other non-ok status codes', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeErrorResponse(403, { error: { message: 'forbidden' } }),
+    );
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('HTTP');
+      expect(e.status).toBe(403);
+    }
+  });
+
+  it('throws NETWORK when fetch rejects', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('NETWORK');
+    }
+  });
+
+  it('rethrows AbortError without wrapping', async () => {
+    const abortError = new DOMException('The operation was aborted', 'AbortError');
+    globalThis.fetch = vi.fn().mockRejectedValue(abortError);
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.name).toBe('AbortError');
+      expect(e).not.toBeInstanceOf(ApiError);
+    }
+  });
+
+  it('throws PARSE for invalid API response structure', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ content: [] }),
+    });
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('PARSE');
+    }
+  });
+
+  it('returns parsed assessment on success', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+    const result = await analyzeTask('test task', 'general', 'home');
+    expect(result.taskSummary).toBe(MOCK_ASSESSMENT.taskSummary);
+    expect(result.riskAssessment.severity).toBe(4);
+  });
+
+  it('passes signal to fetch', async () => {
+    const controller = new AbortController();
+    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+    await analyzeTask('test task', 'general', 'home', { signal: controller.signal });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const fetchCall = globalThis.fetch.mock.calls[0];
+    expect(fetchCall[1].signal).toBe(controller.signal);
+  });
+
+  it('sends correct request body', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+    await analyzeTask('cut tree', 'novice', 'outdoor');
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.model).toBe('claude-sonnet-4-20250514');
+    expect(body.max_tokens).toBe(2500);
+    expect(body.messages[0].content).toContain('cut tree');
+    expect(body.messages[0].content).toContain('novice');
+    expect(body.messages[0].content).toContain('outdoor');
+  });
+});
+
+// ───────────────────────────────────────────────
+// ApiError class
+// ───────────────────────────────────────────────
+describe('ApiError', () => {
+  it('is an instance of Error', () => {
+    const err = new ApiError('msg', 'PARSE');
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(ApiError);
+  });
+
+  it('carries code and status properties', () => {
+    const err = new ApiError('forbidden', 'AUTH', 401);
+    expect(err.message).toBe('forbidden');
+    expect(err.code).toBe('AUTH');
+    expect(err.status).toBe(401);
+    expect(err.name).toBe('ApiError');
+  });
+
+  it('defaults status to null', () => {
+    const err = new ApiError('msg', 'PARSE');
+    expect(err.status).toBeNull();
+  });
+});
