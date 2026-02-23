@@ -5,14 +5,16 @@ import { MOCK_ASSESSMENT } from '../utils/mockData';
 // Minimal valid assessment JSON for building test responses
 const VALID_JSON = JSON.stringify(MOCK_ASSESSMENT);
 
-function makeApiResponse(text) {
+/** Simulate a successful proxy response: { text } */
+function makeProxyResponse(text) {
   return {
     ok: true,
     status: 200,
-    json: () => Promise.resolve({ content: [{ text }] }),
+    json: () => Promise.resolve({ text }),
   };
 }
 
+/** Simulate an error response from the proxy: { error: { code, message } } */
 function makeErrorResponse(status, body = {}) {
   return {
     ok: false,
@@ -174,31 +176,20 @@ describe('parseAssessmentResponse', () => {
 });
 
 // ───────────────────────────────────────────────
-// analyzeTask
+// analyzeTask (calls backend proxy, NOT Anthropic)
 // ───────────────────────────────────────────────
 describe('analyzeTask', () => {
   let originalFetch;
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
-    vi.stubEnv('VITE_ANTHROPIC_API_KEY', 'test-key-123');
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    vi.unstubAllEnvs();
   });
 
-  it('throws NO_API_KEY when env var is missing', async () => {
-    vi.stubEnv('VITE_ANTHROPIC_API_KEY', '');
-    try {
-      await analyzeTask('test task', 'general', 'home');
-      expect.fail('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(ApiError);
-      expect(e.code).toBe('NO_API_KEY');
-    }
-  });
+  // ── Client-side validation (no fetch needed) ──
 
   it('throws VALIDATION for empty task', async () => {
     try {
@@ -249,9 +240,11 @@ describe('analyzeTask', () => {
     }
   });
 
-  it('throws AUTH for 401 response', async () => {
+  // ── Proxy error responses ──
+
+  it('maps error code from proxy error body', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
-      makeErrorResponse(401, { error: { message: 'invalid x-api-key' } }),
+      makeErrorResponse(502, { error: { code: 'AUTH', message: 'invalid key' } }),
     );
     try {
       await analyzeTask('test task', 'general', 'home');
@@ -259,13 +252,13 @@ describe('analyzeTask', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(ApiError);
       expect(e.code).toBe('AUTH');
-      expect(e.status).toBe(401);
+      expect(e.status).toBe(502);
     }
   });
 
-  it('throws RATE_LIMIT for 429 response', async () => {
+  it('maps RATE_LIMIT from proxy 429', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
-      makeErrorResponse(429, { error: { message: 'rate limit exceeded' } }),
+      makeErrorResponse(429, { error: { code: 'RATE_LIMIT', message: 'rate limited' } }),
     );
     try {
       await analyzeTask('test task', 'general', 'home');
@@ -276,20 +269,33 @@ describe('analyzeTask', () => {
     }
   });
 
-  it('throws SERVER for 500 response', async () => {
+  it('maps NO_API_KEY from proxy 500', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
-      makeErrorResponse(500),
+      makeErrorResponse(500, { error: { code: 'NO_API_KEY', message: 'API key not configured' } }),
+    );
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('NO_API_KEY');
+      expect(e.status).toBe(500);
+    }
+  });
+
+  it('maps SERVER from proxy 502', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeErrorResponse(502, { error: { code: 'SERVER', message: 'upstream error' } }),
     );
     try {
       await analyzeTask('test task', 'general', 'home');
       expect.fail('should have thrown');
     } catch (e) {
       expect(e.code).toBe('SERVER');
-      expect(e.status).toBe(500);
+      expect(e.status).toBe(502);
     }
   });
 
-  it('throws HTTP for other non-ok status codes', async () => {
+  it('falls back to HTTP code when error body has no code', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       makeErrorResponse(403, { error: { message: 'forbidden' } }),
     );
@@ -301,6 +307,24 @@ describe('analyzeTask', () => {
       expect(e.status).toBe(403);
     }
   });
+
+  it('handles error response with no parseable JSON body', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error('not json')),
+    });
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('HTTP');
+      expect(e.status).toBe(500);
+    }
+  });
+
+  // ── Network errors ──
 
   it('throws NETWORK when fetch rejects', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
@@ -325,11 +349,13 @@ describe('analyzeTask', () => {
     }
   });
 
-  it('throws PARSE for invalid API response structure', async () => {
+  // ── Response parsing ──
+
+  it('throws PARSE when proxy returns no text field', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ content: [] }),
+      json: () => Promise.resolve({}),
     });
     try {
       await analyzeTask('test task', 'general', 'home');
@@ -339,8 +365,10 @@ describe('analyzeTask', () => {
     }
   });
 
+  // ── Success path ──
+
   it('returns parsed assessment on success', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+    globalThis.fetch = vi.fn().mockResolvedValue(makeProxyResponse(VALID_JSON));
     const result = await analyzeTask('test task', 'general', 'home');
     expect(result.taskSummary).toBe(MOCK_ASSESSMENT.taskSummary);
     expect(result.riskAssessment.severity).toBe(4);
@@ -348,22 +376,29 @@ describe('analyzeTask', () => {
 
   it('passes signal to fetch', async () => {
     const controller = new AbortController();
-    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+    globalThis.fetch = vi.fn().mockResolvedValue(makeProxyResponse(VALID_JSON));
     await analyzeTask('test task', 'general', 'home', { signal: controller.signal });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     const fetchCall = globalThis.fetch.mock.calls[0];
     expect(fetchCall[1].signal).toBe(controller.signal);
   });
 
-  it('sends correct request body', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(makeApiResponse(VALID_JSON));
+  it('sends only task, expertise, environment in request body', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeProxyResponse(VALID_JSON));
     await analyzeTask('cut tree', 'novice', 'outdoor');
-    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
-    expect(body.model).toBe('claude-sonnet-4-20250514');
-    expect(body.max_tokens).toBe(2500);
-    expect(body.messages[0].content).toContain('cut tree');
-    expect(body.messages[0].content).toContain('novice');
-    expect(body.messages[0].content).toContain('outdoor');
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('/api/analyze');
+    const body = JSON.parse(opts.body);
+    expect(body).toEqual({ task: 'cut tree', expertise: 'novice', environment: 'outdoor' });
+  });
+
+  it('does not send API key or Anthropic headers', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeProxyResponse(VALID_JSON));
+    await analyzeTask('test task', 'general', 'home');
+    const [, opts] = globalThis.fetch.mock.calls[0];
+    expect(opts.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(opts.headers['x-api-key']).toBeUndefined();
+    expect(opts.headers['anthropic-version']).toBeUndefined();
   });
 });
 

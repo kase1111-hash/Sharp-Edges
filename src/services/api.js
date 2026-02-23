@@ -1,6 +1,6 @@
 /**
  * API Service for Risk Assessment
- * Handles communication with the Anthropic Claude API
+ * Communicates with the backend proxy — API key never reaches the browser.
  */
 
 import { EXPERTISE_LEVELS, ENVIRONMENTS } from '../utils/constants';
@@ -14,101 +14,10 @@ export class ApiError extends Error {
   }
 }
 
-const API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
-const MAX_TOKENS = 2500;
+const PROXY_ENDPOINT = '/api/analyze';
 const MAX_TASK_LENGTH = 2000;
 const VALID_EXPERTISE = EXPERTISE_LEVELS.map(l => l.value);
 const VALID_ENVIRONMENTS = ENVIRONMENTS.map(e => e.value);
-
-/**
- * System prompt that instructs Claude to generate JSEA briefs
- */
-const SYSTEM_PROMPT = `You are a professional safety analyst specializing in Job Safety & Environmental Analysis (JSEA). Your role is to analyze tasks described by users and generate comprehensive safety assessments.
-
-When analyzing a task, consider:
-1. The user's stated expertise level (novice, general, experienced, professional)
-2. The environment where the task will be performed
-3. All potential hazards across categories: thermal, chemical, mechanical, electrical, biological, ergonomic, environmental, psychological
-4. Realistic risks, not edge cases or extremely unlikely scenarios
-5. Practical, actionable controls following the hierarchy of controls
-
-You must respond with a valid JSON object (no markdown, no explanation, just the JSON) with this exact structure:
-
-{
-  "taskSummary": "1-2 sentence summary of the task as understood",
-  "parsedContext": {
-    "actions": ["array of action verbs identified"],
-    "materials": ["materials/substances involved"],
-    "tools": ["tools or equipment needed"],
-    "environmentFactors": ["relevant environmental considerations"]
-  },
-  "hazards": [
-    {
-      "category": "one of: thermal, chemical, mechanical, electrical, biological, ergonomic, environmental, psychological",
-      "description": "specific hazard description",
-      "mechanism": "how injury/damage could occur"
-    }
-  ],
-  "riskAssessment": {
-    "severity": 1-5,
-    "likelihood": 1-5,
-    "overallLevel": "low, moderate, high, or critical",
-    "rationale": "explanation of the risk rating"
-  },
-  "controls": {
-    "elimination": ["ways to remove hazard entirely"],
-    "substitution": ["safer alternatives"],
-    "engineering": ["physical barriers, ventilation, equipment modifications"],
-    "administrative": ["procedures, training, timing"],
-    "ppe": ["personal protective equipment needed"]
-  },
-  "emergencyActions": ["emergency response steps if something goes wrong"],
-  "preTaskChecklist": ["items to verify before starting"],
-  "ethicalNote": "any ethical or responsibility considerations",
-  "additionalConsiderations": "common mistakes, overlooked items, or helpful tips"
-}
-
-Severity Scale (1-5):
-1 = Negligible: Minor discomfort, no treatment needed
-2 = Minor: First aid treatment required
-3 = Moderate: Medical treatment required
-4 = Major: Serious injury, hospitalization
-5 = Catastrophic: Fatality or permanent disability
-
-Likelihood Scale (1-5):
-1 = Rare: Highly unlikely to occur
-2 = Unlikely: Could occur but not expected
-3 = Possible: May occur occasionally
-4 = Likely: Will probably occur
-5 = Almost Certain: Expected to occur
-
-Risk Level Thresholds:
-- Score 1-4: Low
-- Score 5-9: Moderate
-- Score 10-16: High
-- Score 17-25: Critical
-
-Be practical and helpful, not alarmist. Focus on the most significant hazards and provide actionable guidance. Adjust recommendations based on the user's expertise level - novices need more detailed guidance, professionals need reminders of best practices.`;
-
-/**
- * Build the user prompt from input parameters
- */
-function buildUserPrompt(task, expertise, environment) {
-  return `Please analyze the following task and provide a safety assessment:
-
-Task Description: ${task}
-
-User Expertise Level: ${expertise}
-- novice: First time doing this task
-- general: Some basic experience
-- experienced: Done this many times
-- professional: Trained/certified in this area
-
-Environment: ${environment}
-
-Provide your response as a JSON object only.`;
-}
 
 /**
  * Parse the API response and extract the assessment JSON
@@ -175,18 +84,11 @@ export function parseAssessmentResponse(responseText) {
 }
 
 /**
- * Call the Anthropic API to analyze a task
+ * Call the backend proxy to analyze a task.
+ * The server holds the API key and system prompt — the client only sends user inputs.
  */
 export async function analyzeTask(task, expertise, environment, { signal } = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new ApiError(
-      'API key not configured. Please add VITE_ANTHROPIC_API_KEY to your .env.local file.',
-      'NO_API_KEY',
-    );
-  }
-
+  // Client-side validation for immediate UX feedback
   if (!task || typeof task !== 'string' || task.trim().length === 0) {
     throw new ApiError('Task description is required', 'VALIDATION');
   }
@@ -202,24 +104,10 @@ export async function analyzeTask(task, expertise, environment, { signal } = {})
 
   let response;
   try {
-    response = await fetch(API_ENDPOINT, {
+    response = await fetch(PROXY_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: buildUserPrompt(task, expertise, environment),
-          },
-        ],
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, expertise, environment }),
       signal,
     });
   } catch (fetchError) {
@@ -229,19 +117,16 @@ export async function analyzeTask(task, expertise, environment, { signal } = {})
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    const code = errorData.error?.code || 'HTTP';
     const msg = errorData.error?.message || `API request failed with status ${response.status}`;
-
-    if (response.status === 401) throw new ApiError(msg, 'AUTH', 401);
-    if (response.status === 429) throw new ApiError(msg, 'RATE_LIMIT', 429);
-    if (response.status >= 500) throw new ApiError(msg, 'SERVER', response.status);
-    throw new ApiError(msg, 'HTTP', response.status);
+    throw new ApiError(msg, code, response.status);
   }
 
   const data = await response.json();
 
-  if (!data.content?.[0]?.text) {
+  if (!data.text) {
     throw new ApiError('Invalid API response structure', 'PARSE');
   }
 
-  return parseAssessmentResponse(data.content[0].text);
+  return parseAssessmentResponse(data.text);
 }

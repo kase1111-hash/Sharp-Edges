@@ -80,7 +80,7 @@ describe('useRiskAnalysis', () => {
       await result.current.analyze('test task', 'general', 'home');
     });
 
-    expect(result.current.error).toBe('API key not configured. Please check your environment setup.');
+    expect(result.current.error).toBe('API key not configured on the server. Please contact the administrator.');
     expect(result.current.assessment).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe('useRiskAnalysis', () => {
       await result.current.analyze('test task', 'general', 'home');
     });
 
-    expect(result.current.error).toBe('Authentication failed. Please check your API key.');
+    expect(result.current.error).toBe('Server authentication with the analysis service failed. Please contact the administrator.');
   });
 
   it('maps RATE_LIMIT error to user-friendly message', async () => {

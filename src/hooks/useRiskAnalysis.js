@@ -3,9 +3,9 @@ import { analyzeTask } from '../services/api';
 import { logger } from '../utils/logger';
 
 const ERROR_MESSAGES = {
-  NO_API_KEY:  'API key not configured. Please check your environment setup.',
+  NO_API_KEY:  'API key not configured on the server. Please contact the administrator.',
   NETWORK:     'Unable to connect to the server. Please check your internet connection.',
-  AUTH:        'Authentication failed. Please check your API key.',
+  AUTH:        'Server authentication with the analysis service failed. Please contact the administrator.',
   RATE_LIMIT:  'Too many requests. Please wait a moment and try again.',
   SERVER:      'Server error. Please try again later.',
   PARSE:       'Could not parse the response. Please try again.',
