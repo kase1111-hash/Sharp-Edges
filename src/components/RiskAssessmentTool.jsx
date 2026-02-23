@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import InputForm from './InputForm';
 import ResultsDisplay from './ResultsDisplay';
 import ErrorDisplay from './ErrorDisplay';
@@ -11,15 +11,20 @@ export default function RiskAssessmentTool() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [checkedItems, setCheckedItems] = useState(new Set());
   const resultsRef = useRef(null);
+  const scrollTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, []);
 
   const handleSubmit = async ({ taskDescription, expertiseLevel, environment }) => {
-    // Store input for retry functionality
     setLastInput({ taskDescription, expertiseLevel, environment });
 
     await analyze(taskDescription, expertiseLevel, environment);
 
-    // Scroll to results after a short delay to allow render
-    setTimeout(() => {
+    scrollTimerRef.current = setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };

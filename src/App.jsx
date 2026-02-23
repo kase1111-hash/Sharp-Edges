@@ -1,7 +1,12 @@
+import ErrorBoundary from './components/ErrorBoundary'
 import RiskAssessmentTool from './components/RiskAssessmentTool'
 
 function App() {
-  return <RiskAssessmentTool />
+  return (
+    <ErrorBoundary>
+      <RiskAssessmentTool />
+    </ErrorBoundary>
+  )
 }
 
 export default App

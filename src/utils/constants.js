@@ -35,16 +35,6 @@ export const HAZARD_CATEGORIES = {
   psychological: { label: 'Psychological', color: 'text-pink-600', bgColor: 'bg-pink-100' },
 };
 
-export const RISK_LEVELS = {
-  low: { label: 'Low', color: 'text-green-700', bgColor: 'bg-green-500', lightBg: 'bg-green-100' },
-  moderate: { label: 'Moderate', color: 'text-yellow-700', bgColor: 'bg-yellow-500', lightBg: 'bg-yellow-100' },
-  high: { label: 'High', color: 'text-orange-700', bgColor: 'bg-orange-500', lightBg: 'bg-orange-100' },
-  critical: { label: 'Critical', color: 'text-red-700', bgColor: 'bg-red-500', lightBg: 'bg-red-100' },
-};
-
-export const SEVERITY_LABELS = ['Negligible', 'Minor', 'Moderate', 'Major', 'Catastrophic'];
-export const LIKELIHOOD_LABELS = ['Rare', 'Unlikely', 'Possible', 'Likely', 'Almost Certain'];
-
 export const CONTROL_HIERARCHY = [
   { key: 'elimination', label: 'Elimination', description: 'Remove the hazard entirely', priority: 1 },
   { key: 'substitution', label: 'Substitution', description: 'Use safer alternatives', priority: 2 },
