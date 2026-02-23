@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { analyzeTask } from '../services/api';
+import { logger } from '../utils/logger';
 
 const ERROR_MESSAGES = {
   NO_API_KEY:  'API key not configured. Please check your environment setup.',
@@ -49,7 +50,7 @@ export function useRiskAnalysis() {
       if (!controller.signal.aborted) {
         setError(errorMessage);
       }
-      console.error('Risk analysis error:', err);
+      logger.error('Risk analysis failed', { code: err.code, message: err.message, status: err.status });
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
