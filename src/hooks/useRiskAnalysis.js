@@ -10,6 +10,8 @@ const ERROR_MESSAGES = {
   SERVER:      'Server error. Please try again later.',
   PARSE:       'Could not parse the response. Please try again.',
   VALIDATION:  'Received incomplete response. Please try again.',
+  INCOMPLETE:  'The analysis was cut off before it finished. Please try again.',
+  REFUSED:     'The analysis service declined this request. Try rephrasing the task description.',
 };
 
 export function useRiskAnalysis() {

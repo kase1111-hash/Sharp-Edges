@@ -4,6 +4,7 @@
  */
 
 import { EXPERTISE_LEVELS, ENVIRONMENTS } from '../utils/constants';
+import { calculateRiskScore, getRiskLevel, RISK_LEVEL_INFO } from '../utils/riskCalculations';
 
 export class ApiError extends Error {
   constructor(message, code, status = null) {
@@ -18,6 +19,17 @@ const PROXY_ENDPOINT = '/api/analyze';
 const MAX_TASK_LENGTH = 2000;
 const VALID_EXPERTISE = EXPERTISE_LEVELS.map(l => l.value);
 const VALID_ENVIRONMENTS = ENVIRONMENTS.map(e => e.value);
+const RISK_LEVELS = Object.keys(RISK_LEVEL_INFO);
+
+const isRating = (value) => Number.isInteger(value) && value >= 1 && value <= 5;
+const toStringList = (value) => (Array.isArray(value) ? value.filter(item => typeof item === 'string') : []);
+
+// Errors without a code in the body (e.g. from a reverse proxy) still get a meaningful category
+function codeForStatus(status) {
+  if (status === 429) return 'RATE_LIMIT';
+  if (status >= 500) return 'SERVER';
+  return 'HTTP';
+}
 
 /**
  * Parse the API response and extract the assessment JSON
@@ -52,28 +64,42 @@ export function parseAssessmentResponse(responseText) {
     }
   }
 
-  if (
-    typeof assessment.riskAssessment.severity !== 'number' ||
-    typeof assessment.riskAssessment.likelihood !== 'number' ||
-    !assessment.riskAssessment.overallLevel
-  ) {
+  for (const field of ['hazards', 'emergencyActions', 'preTaskChecklist']) {
+    if (!Array.isArray(assessment[field])) {
+      throw new ApiError(`Invalid ${field}: expected a list`, 'VALIDATION');
+    }
+  }
+
+  const { riskAssessment } = assessment;
+  if (!isRating(riskAssessment?.severity) || !isRating(riskAssessment?.likelihood)) {
     throw new ApiError('Invalid riskAssessment structure', 'VALIDATION');
   }
 
+  // The UI only knows four levels; fall back to the score's level if the model's is missing or off-scale
+  const level = String(riskAssessment.overallLevel ?? '').trim().toLowerCase();
+  riskAssessment.overallLevel = RISK_LEVELS.includes(level)
+    ? level
+    : getRiskLevel(calculateRiskScore(riskAssessment.severity, riskAssessment.likelihood));
+
+  // Drop entries the components can't render
+  assessment.hazards = assessment.hazards.filter(hazard => hazard && typeof hazard === 'object');
+  assessment.emergencyActions = toStringList(assessment.emergencyActions);
+  assessment.preTaskChecklist = toStringList(assessment.preTaskChecklist);
+
   // Ensure arrays have default values
   assessment.parsedContext = {
-    actions: assessment.parsedContext?.actions || [],
-    materials: assessment.parsedContext?.materials || [],
-    tools: assessment.parsedContext?.tools || [],
-    environmentFactors: assessment.parsedContext?.environmentFactors || [],
+    actions: toStringList(assessment.parsedContext?.actions),
+    materials: toStringList(assessment.parsedContext?.materials),
+    tools: toStringList(assessment.parsedContext?.tools),
+    environmentFactors: toStringList(assessment.parsedContext?.environmentFactors),
   };
 
   assessment.controls = {
-    elimination: assessment.controls?.elimination || [],
-    substitution: assessment.controls?.substitution || [],
-    engineering: assessment.controls?.engineering || [],
-    administrative: assessment.controls?.administrative || [],
-    ppe: assessment.controls?.ppe || [],
+    elimination: toStringList(assessment.controls?.elimination),
+    substitution: toStringList(assessment.controls?.substitution),
+    engineering: toStringList(assessment.controls?.engineering),
+    administrative: toStringList(assessment.controls?.administrative),
+    ppe: toStringList(assessment.controls?.ppe),
   };
 
   // Ensure optional string fields have defaults
@@ -117,14 +143,14 @@ export async function analyzeTask(task, expertise, environment, { signal } = {})
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const code = errorData.error?.code || 'HTTP';
+    const code = errorData.error?.code || codeForStatus(response.status);
     const msg = errorData.error?.message || `API request failed with status ${response.status}`;
     throw new ApiError(msg, code, response.status);
   }
 
-  const data = await response.json();
+  const data = await response.json().catch(() => null);
 
-  if (!data.text) {
+  if (!data?.text) {
     throw new ApiError('Invalid API response structure', 'PARSE');
   }
 

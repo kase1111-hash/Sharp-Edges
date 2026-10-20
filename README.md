@@ -15,7 +15,7 @@ An AI-powered risk assessment tool that generates Job Safety & Environmental Ana
 ## How It Works
 
 1. **Input**: Enter a task description, select your experience level (novice to professional), and choose your environment (home, garage, outdoor, etc.)
-2. **Analysis**: The tool sends your task to Claude AI with a structured JSEA prompt
+2. **Analysis**: The app's server sends your task to Claude (Claude Sonnet 5.5) with a structured JSEA prompt
 3. **Output**: Receive a detailed safety brief including:
    - Parsed context (actions, materials, tools, environment factors)
    - Identified hazards with mechanisms of injury
@@ -49,14 +49,20 @@ cd Sharp-Edges
 # Install dependencies
 npm install
 
-# Start the development server
+# Add your Anthropic API key (see Configuration)
+cp .env.example .env.local
+
+# Start the API server and the Vite dev server together
 npm run dev
 ```
 
+Then open http://localhost:5173. `npm run dev` runs the API server on port 3001 and
+Vite on port 5173, which forwards `/api` requests to the API server. To run them
+separately, use `npm run dev:server` and `npm run dev:client`.
+
 ## Requirements
 
-- Node.js 16+
-- React 18+
+- Node.js 20.19+ or 22.12+
 - An Anthropic API key for Claude
 
 ## Configuration
@@ -68,12 +74,32 @@ npm run dev
 
 2. Add your Anthropic API key to `.env.local`:
    ```
-   VITE_ANTHROPIC_API_KEY=your_api_key_here
+   ANTHROPIC_API_KEY=your_api_key_here
    ```
 
 3. Get an API key from [console.anthropic.com](https://console.anthropic.com/)
 
-> **Note**: For production use, implement a backend proxy to avoid exposing API keys in client-side code. The current setup is for development only.
+The key is read only by the API server (`server/index.js` loads `.env.local`, then `.env`;
+variables already set in the environment take precedence) and is never sent to the browser.
+Do not use a `VITE_` prefix for it: Vite exposes `VITE_` variables to client code.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key used by the server |
+| `PORT` | No | Port for `npm start` (default `3001`) |
+| `TRUST_PROXY` | No | Number of reverse proxies in front of the server, so rate limiting sees real client IPs |
+
+## Production
+
+```bash
+npm run build
+ANTHROPIC_API_KEY=your_api_key_here npm start
+```
+
+`npm start` serves the built app and the `/api/analyze` endpoint from one Express server
+(port `3001` unless `PORT` is set). The endpoint allows each client a burst of 3 analyses,
+then 10 per minute. If the server runs behind a reverse proxy, set `TRUST_PROXY` (e.g. `1`);
+otherwise every client shares the proxy's address and therefore one rate limit.
 
 ## Example Tasks
 
@@ -91,11 +117,16 @@ The tool includes quick-select examples:
 
 - `react` - UI framework
 - `lucide-react` - Icon library (AlertTriangle, Shield, Activity, CheckCircle, etc.)
+- `express` - API server and production static hosting
+- `@anthropic-ai/sdk` - Official Anthropic SDK, used by the server to call Claude
 
 ## Project Structure
 
 ```
 Sharp-Edges/
+├── server/
+│   ├── index.js                 # Entry point: loads env files, starts the server
+│   └── app.js                   # Express app: /api/analyze proxy to Claude, rate limiting
 ├── src/
 │   ├── components/          # React UI components
 │   │   ├── RiskAssessmentTool.jsx
@@ -106,7 +137,7 @@ Sharp-Edges/
 │   ├── hooks/
 │   │   └── useRiskAnalysis.js   # API state management
 │   ├── services/
-│   │   └── api.js               # Anthropic API integration
+│   │   └── api.js               # Client for the /api/analyze endpoint
 │   └── utils/
 │       ├── constants.js         # App configuration
 │       └── riskCalculations.js  # Risk scoring logic

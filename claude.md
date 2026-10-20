@@ -7,12 +7,17 @@ AI-powered risk assessment tool that generates Job Safety & Environmental Analys
 - **Framework**: React 18 with Vite 6
 - **Styling**: Tailwind CSS 3.4
 - **Testing**: Vitest + React Testing Library
-- **API**: Anthropic Claude API (claude-sonnet-4-20250514)
+- **API**: Anthropic Claude API (`claude-sonnet-5-5`) via `@anthropic-ai/sdk`, called only from the Express server
+- **Server**: Express 4 (`/api/analyze` proxy, production static hosting)
 - **Icons**: Lucide React
 
 ## Project Structure
 
 ```
+server/
+├── index.js              # Entry point: loads .env.local/.env, starts the server
+├── app.js                # createApp(): /api/analyze, rate limiting, static hosting in production
+└── app.test.js           # Server tests (Vitest node environment)
 src/
 ├── components/           # React UI components
 │   ├── RiskAssessmentTool.jsx  # Main container, state management
@@ -23,7 +28,7 @@ src/
 ├── hooks/
 │   └── useRiskAnalysis.js      # API state management hook
 ├── services/
-│   └── api.js                  # Anthropic API integration
+│   └── api.js                  # Client for /api/analyze; validates the model's JSON
 └── utils/
     ├── constants.js            # EXPERTISE_LEVELS, ENVIRONMENTS, etc.
     └── riskCalculations.js     # Risk scoring logic & color mappings
@@ -32,8 +37,11 @@ src/
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (port 5173)
+npm run dev          # API server (port 3001) + Vite dev server (port 5173)
+npm run dev:server   # API server only
+npm run dev:client   # Vite only (proxies /api to port 3001)
 npm run build        # Production build
+npm start            # Serve dist/ and the API from Express (production)
 npm run test         # Run tests once
 npm run test:watch   # Watch mode
 ```
@@ -42,8 +50,9 @@ npm run test:watch   # Watch mode
 
 Copy `.env.example` to `.env.local` and add your Anthropic API key:
 ```
-VITE_ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_api_key_here
 ```
+The server loads `.env.local`, then `.env`; real environment variables take precedence.
 
 ## Coding Conventions
 
@@ -85,6 +94,8 @@ thermal, chemical, mechanical, electrical, biological, ergonomic, environmental,
 ## Important Notes
 
 - API key should never be committed; use `.env.local` for development
-- Production deployments should use a backend proxy for API calls
+- The API key, system prompt and model config live only in `server/app.js`; never give the key a `VITE_` prefix or reference it from `src/`
+- Treat model output as untrusted: `parseAssessmentResponse` validates and normalizes it before any component renders it
+- `/api/analyze` is rate limited per client IP (burst 3, then 10/min); set `TRUST_PROXY` when deployed behind a reverse proxy
 - The app is mobile-responsive using Tailwind breakpoints (md:/lg:)
 - Error handling includes user-friendly messages with retry/dismiss actions

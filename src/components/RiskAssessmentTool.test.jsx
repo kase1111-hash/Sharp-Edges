@@ -203,6 +203,32 @@ describe('RiskAssessmentTool', () => {
     });
   });
 
+  it('clears checklist progress when a new analysis is submitted', async () => {
+    analyzeTask.mockResolvedValue(MOCK_ASSESSMENT);
+
+    render(<RiskAssessmentTool />);
+    fillAndSubmit('first task');
+
+    await waitFor(() => {
+      expect(screen.getByText('Safety Assessment')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect(screen.getAllByRole('checkbox')[0]).toHaveAttribute('aria-checked', 'true');
+
+    // Submit a different task straight from the form, bypassing "Start New Assessment"
+    fillAndSubmit('second task');
+
+    await waitFor(() => {
+      expect(analyzeTask).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Safety Assessment')).toBeInTheDocument();
+    });
+
+    for (const checkbox of screen.getAllByRole('checkbox')) {
+      expect(checkbox).toHaveAttribute('aria-checked', 'false');
+    }
+  });
+
   it('cancelling dialog preserves state', async () => {
     analyzeTask.mockResolvedValue(MOCK_ASSESSMENT);
 

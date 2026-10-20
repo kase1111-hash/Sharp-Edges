@@ -42,9 +42,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Express API server (`server/`) that holds the Anthropic API key and serves `/api/analyze`, so the key no longer ships to the browser
+- Per-client rate limiting on `/api/analyze`: bursts of 3, then 10 requests per minute (`TRUST_PROXY` for deployments behind a reverse proxy)
+- `npm run dev` starts the API server and the Vite dev server together
+
+### Changed
+
+- Model switched from the retired `claude-sonnet-4-20250514` to `claude-sonnet-5-5` at low effort, called through the official Anthropic SDK (automatic retries, server-side refusal fallback)
+- The API key is configured as `ANTHROPIC_API_KEY` in `.env.local` (previously `VITE_ANTHROPIC_API_KEY`)
+- Node.js 20.19+ or 22.12+ is required
+
+### Fixed
+
+- Every analysis failed because the configured model had been retired
+- The server never read `.env.local`, so the documented setup failed with "API key not configured"
+- A capitalized or unrecognized risk level from the model crashed the results view
+- Truncated and declined model responses were reported as parse errors; they now get specific messages and are logged
+- Checklist ticks carried over to the next assessment when a new analysis was submitted from the form
+- Upstream API failures were not logged on the server
+
 ### Planned
 
-- Backend proxy for secure API key handling
 - Assessment history and storage
 - PDF export functionality
 - Multi-language support
