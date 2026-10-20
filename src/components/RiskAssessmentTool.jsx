@@ -21,6 +21,8 @@ export default function RiskAssessmentTool() {
 
   const handleSubmit = async ({ taskDescription, expertiseLevel, environment }) => {
     setLastInput({ taskDescription, expertiseLevel, environment });
+    // Checklist progress is tracked by item index, so it can't carry over to a new assessment
+    setCheckedItems(new Set());
 
     await analyze(taskDescription, expertiseLevel, environment);
 

@@ -144,6 +144,30 @@ describe('useRiskAnalysis', () => {
     expect(result.current.error).toBe('Could not parse the response. Please try again.');
   });
 
+  it('maps INCOMPLETE error to user-friendly message', async () => {
+    analyzeTask.mockRejectedValue(new ApiError('raw msg', 'INCOMPLETE', 502));
+
+    const { result } = renderHook(() => useRiskAnalysis());
+
+    await act(async () => {
+      await result.current.analyze('test task', 'general', 'home');
+    });
+
+    expect(result.current.error).toBe('The analysis was cut off before it finished. Please try again.');
+  });
+
+  it('maps REFUSED error to user-friendly message', async () => {
+    analyzeTask.mockRejectedValue(new ApiError('raw msg', 'REFUSED', 502));
+
+    const { result } = renderHook(() => useRiskAnalysis());
+
+    await act(async () => {
+      await result.current.analyze('test task', 'general', 'home');
+    });
+
+    expect(result.current.error).toBe('The analysis service declined this request. Try rephrasing the task description.');
+  });
+
   it('falls back to err.message for unknown error codes', async () => {
     analyzeTask.mockRejectedValue(new Error('something unexpected'));
 

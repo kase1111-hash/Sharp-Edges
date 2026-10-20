@@ -23,7 +23,7 @@ Thank you for your interest in contributing to Sharp-Edges! This document provid
 
 ### Prerequisites
 
-- Node.js 16 or higher
+- Node.js 20.19+ or 22.12+
 - npm 7 or higher
 - An Anthropic API key (for testing API integration)
 
@@ -35,8 +35,10 @@ Thank you for your interest in contributing to Sharp-Edges! This document provid
    ```
 2. Add your Anthropic API key to `.env.local`:
    ```
-   VITE_ANTHROPIC_API_KEY=your_api_key_here
+   ANTHROPIC_API_KEY=your_api_key_here
    ```
+   Only the API server reads this key. Never give it a `VITE_` prefix, which would make it
+   available to browser code.
 
 ### Running the Development Server
 
@@ -44,7 +46,8 @@ Thank you for your interest in contributing to Sharp-Edges! This document provid
 npm run dev
 ```
 
-This starts the Vite development server at `http://localhost:5173`.
+This starts the API server on port 3001 and the Vite development server at
+`http://localhost:5173`, which forwards `/api` requests to the API server.
 
 ### Running Tests
 
@@ -97,18 +100,20 @@ Update API error handling for rate limits
 ## Project Structure
 
 ```
+server/             # Express API server (holds the API key, calls Claude)
 src/
 ├── components/     # React UI components
 ├── hooks/          # Custom React hooks
-├── services/       # API and external service integrations
+├── services/       # Client for the API server
 ├── utils/          # Utility functions and constants
 └── test/           # Test configuration and utilities
 ```
 
 ### Key Files
 
+- `server/app.js` - `/api/analyze` endpoint: validation, Claude request, rate limiting
 - `src/components/RiskAssessmentTool.jsx` - Main application component
-- `src/services/api.js` - Anthropic API integration
+- `src/services/api.js` - Calls `/api/analyze` and validates the returned assessment
 - `src/utils/riskCalculations.js` - Risk scoring logic
 - `src/utils/constants.js` - Application configuration
 

@@ -23,6 +23,27 @@ function makeErrorResponse(status, body = {}) {
   };
 }
 
+/** Assert that fn throws an ApiError with the given code (fails if nothing is thrown) */
+function expectApiError(fn, code, messagePattern) {
+  let error;
+  try {
+    fn();
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeInstanceOf(ApiError);
+  expect(error.code).toBe(code);
+  if (messagePattern) expect(error.message).toMatch(messagePattern);
+}
+
+/** MOCK_ASSESSMENT with riskAssessment fields overridden */
+function withRisk(overrides) {
+  return JSON.stringify({
+    ...MOCK_ASSESSMENT,
+    riskAssessment: { ...MOCK_ASSESSMENT.riskAssessment, ...overrides },
+  });
+}
+
 // ───────────────────────────────────────────────
 // parseAssessmentResponse
 // ───────────────────────────────────────────────
@@ -64,72 +85,72 @@ describe('parseAssessmentResponse', () => {
   it('throws VALIDATION for missing taskSummary', () => {
     const incomplete = { ...MOCK_ASSESSMENT };
     delete incomplete.taskSummary;
-    try {
-      parseAssessmentResponse(JSON.stringify(incomplete));
-    } catch (e) {
-      expect(e).toBeInstanceOf(ApiError);
-      expect(e.code).toBe('VALIDATION');
-      expect(e.message).toMatch(/taskSummary/);
-    }
+    expectApiError(() => parseAssessmentResponse(JSON.stringify(incomplete)), 'VALIDATION', /taskSummary/);
   });
 
   it('throws VALIDATION for missing hazards', () => {
     const incomplete = { ...MOCK_ASSESSMENT };
     delete incomplete.hazards;
-    try {
-      parseAssessmentResponse(JSON.stringify(incomplete));
-    } catch (e) {
-      expect(e.code).toBe('VALIDATION');
-      expect(e.message).toMatch(/hazards/);
-    }
+    expectApiError(() => parseAssessmentResponse(JSON.stringify(incomplete)), 'VALIDATION', /hazards/);
   });
 
   it('throws VALIDATION for missing riskAssessment', () => {
     const incomplete = { ...MOCK_ASSESSMENT };
     delete incomplete.riskAssessment;
-    try {
-      parseAssessmentResponse(JSON.stringify(incomplete));
-    } catch (e) {
-      expect(e.code).toBe('VALIDATION');
-      expect(e.message).toMatch(/riskAssessment/);
-    }
+    expectApiError(() => parseAssessmentResponse(JSON.stringify(incomplete)), 'VALIDATION', /riskAssessment/);
+  });
+
+  it('throws VALIDATION when riskAssessment is null', () => {
+    const bad = JSON.stringify({ ...MOCK_ASSESSMENT, riskAssessment: null });
+    expectApiError(() => parseAssessmentResponse(bad), 'VALIDATION', /Invalid riskAssessment/);
   });
 
   it('throws VALIDATION when severity is not a number', () => {
-    const bad = {
-      ...MOCK_ASSESSMENT,
-      riskAssessment: { ...MOCK_ASSESSMENT.riskAssessment, severity: 'high' },
-    };
-    try {
-      parseAssessmentResponse(JSON.stringify(bad));
-    } catch (e) {
-      expect(e.code).toBe('VALIDATION');
-      expect(e.message).toMatch(/Invalid riskAssessment/);
-    }
+    expectApiError(() => parseAssessmentResponse(withRisk({ severity: 'high' })), 'VALIDATION', /Invalid riskAssessment/);
   });
 
   it('throws VALIDATION when likelihood is not a number', () => {
-    const bad = {
-      ...MOCK_ASSESSMENT,
-      riskAssessment: { ...MOCK_ASSESSMENT.riskAssessment, likelihood: null },
-    };
-    try {
-      parseAssessmentResponse(JSON.stringify(bad));
-    } catch (e) {
-      expect(e.code).toBe('VALIDATION');
-    }
+    expectApiError(() => parseAssessmentResponse(withRisk({ likelihood: null })), 'VALIDATION');
   });
 
-  it('throws VALIDATION when overallLevel is missing', () => {
-    const bad = {
+  it.each([0, 6, 3.5])('throws VALIDATION when severity is %s (not an integer from 1 to 5)', (severity) => {
+    expectApiError(() => parseAssessmentResponse(withRisk({ severity })), 'VALIDATION', /Invalid riskAssessment/);
+  });
+
+  it('throws VALIDATION when a required list is not an array', () => {
+    const bad = JSON.stringify({ ...MOCK_ASSESSMENT, preTaskChecklist: 'Wear gloves' });
+    expectApiError(() => parseAssessmentResponse(bad), 'VALIDATION', /preTaskChecklist/);
+  });
+
+  it('derives overallLevel from the score when it is missing', () => {
+    const result = parseAssessmentResponse(
+      JSON.stringify({ ...MOCK_ASSESSMENT, riskAssessment: { severity: 3, likelihood: 3 } }),
+    );
+    expect(result.riskAssessment.overallLevel).toBe('moderate');
+  });
+
+  it('normalizes overallLevel casing and whitespace', () => {
+    const result = parseAssessmentResponse(withRisk({ overallLevel: ' High ' }));
+    expect(result.riskAssessment.overallLevel).toBe('high');
+  });
+
+  it('replaces an unrecognized overallLevel with the score-derived level', () => {
+    // severity 4 x likelihood 3 = 12 -> high
+    const result = parseAssessmentResponse(withRisk({ overallLevel: 'medium' }));
+    expect(result.riskAssessment.overallLevel).toBe('high');
+  });
+
+  it('drops list entries the UI cannot render', () => {
+    const messy = {
       ...MOCK_ASSESSMENT,
-      riskAssessment: { severity: 3, likelihood: 3 },
+      hazards: [MOCK_ASSESSMENT.hazards[0], null, 'loose text'],
+      emergencyActions: ['Call 911', { step: 2 }],
+      parsedContext: { ...MOCK_ASSESSMENT.parsedContext, tools: 'chainsaw' },
     };
-    try {
-      parseAssessmentResponse(JSON.stringify(bad));
-    } catch (e) {
-      expect(e.code).toBe('VALIDATION');
-    }
+    const result = parseAssessmentResponse(JSON.stringify(messy));
+    expect(result.hazards).toEqual([MOCK_ASSESSMENT.hazards[0]]);
+    expect(result.emergencyActions).toEqual(['Call 911']);
+    expect(result.parsedContext.tools).toEqual([]);
   });
 
   it('defaults empty arrays in parsedContext', () => {
@@ -308,10 +329,11 @@ describe('analyzeTask', () => {
     }
   });
 
-  it('handles error response with no parseable JSON body', async () => {
+  it('derives the code from the status when the error body is not JSON', async () => {
+    // e.g. an HTML error page from a reverse proxy in front of the server
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
-      status: 500,
+      status: 504,
       json: () => Promise.reject(new Error('not json')),
     });
     try {
@@ -319,8 +341,18 @@ describe('analyzeTask', () => {
       expect.fail('should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(ApiError);
-      expect(e.code).toBe('HTTP');
-      expect(e.status).toBe(500);
+      expect(e.code).toBe('SERVER');
+      expect(e.status).toBe(504);
+    }
+  });
+
+  it('maps a 429 without an error code to RATE_LIMIT', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeErrorResponse(429));
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e.code).toBe('RATE_LIMIT');
     }
   });
 
@@ -350,6 +382,21 @@ describe('analyzeTask', () => {
   });
 
   // ── Response parsing ──
+
+  it('throws PARSE when a successful response is not JSON', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+    });
+    try {
+      await analyzeTask('test task', 'general', 'home');
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e.code).toBe('PARSE');
+    }
+  });
 
   it('throws PARSE when proxy returns no text field', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({

@@ -35,30 +35,29 @@ This application uses the Anthropic API and requires an API key. Important secur
 
 - **Never commit API keys** to version control
 - The `.env` and `.env.local` files are included in `.gitignore`
-- For development, store your API key in `.env.local`
-- **For production**: Implement a backend proxy to avoid exposing API keys in client-side code
+- For development, store your API key in `.env.local` as `ANTHROPIC_API_KEY`
+- The key is read only by the Express server (`server/`), which calls the Anthropic API on the
+  browser's behalf; it never appears in the client bundle
+- Never give the key a `VITE_` prefix: Vite exposes `VITE_` variables to client code
+
+### Architecture
+
+```
+[Browser] --> [Express server: /api/analyze] --> [Anthropic API]
+                    |
+                    +-- API key and system prompt stored server-side
+                    +-- Input validation
+                    +-- Per-client rate limiting (burst of 3, then 10 requests/minute)
+```
 
 ### Current Limitations
 
-The current implementation exposes the API key to the client-side JavaScript. This is acceptable for:
-- Local development
-- Personal use
-- Demo purposes
-
-For production deployments with multiple users, implement a server-side proxy to:
-- Keep the API key secure on the server
-- Add rate limiting
-- Implement user authentication
-
-### Recommended Production Architecture
-
-```
-[Client] --> [Your Backend Server] --> [Anthropic API]
-                    |
-                    +-- API key stored securely
-                    +-- Rate limiting
-                    +-- Authentication
-```
+- There is no user authentication: anyone who can reach the server can request analyses, which
+  are billed to the configured API key. Rate limiting bounds how fast each client can do so, but
+  monitor your Anthropic usage, and put the app behind authentication if it is publicly reachable.
+- Rate limits are tracked per client IP in memory, per server process. Behind a reverse proxy, set
+  `TRUST_PROXY` to the number of proxies so the real client IP is used; otherwise all clients share
+  the proxy's address and one limit.
 
 ## Dependencies
 
